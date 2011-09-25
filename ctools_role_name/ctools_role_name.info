@@ -1,0 +1,5 @@
+name = Chaos Tools (CTools) Role Name Access Plugin
+description = Adds a role name access plugin. Useful for exporting and importing site objects.
+package = Chaos tool suite
+dependencies[] = ctools
+core = 6.x

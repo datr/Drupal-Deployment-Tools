@@ -1,0 +1,7 @@
+<?php
+
+function ctools_role_name_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && !empty($plugin)) {
+    return "plugins/$plugin";
+  }
+}
