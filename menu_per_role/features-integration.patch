@@ -1,0 +1,220 @@
+From 43711e4fa9ca0d724ffb2ec40545e2bba43d1629 Mon Sep 17 00:00:00 2001
+From: Dean Reilly <dean.reilly@gmail.com>
+Date: Mon, 19 Sep 2011 13:39:44 +0100
+Subject: [PATCH] Added features integration code.
+
+---
+ menu_per_role.features.inc |  157 ++++++++++++++++++++++++++++++++++++++++++++
+ menu_per_role.module       |   26 +++++++-
+ 2 files changed, 182 insertions(+), 1 deletions(-)
+ create mode 100644 menu_per_role.features.inc
+
+diff --git a/menu_per_role.features.inc b/menu_per_role.features.inc
+new file mode 100644
+index 0000000..feccada
+--- /dev/null
++++ b/menu_per_role.features.inc
+@@ -0,0 +1,157 @@
++<?php
++
++/**
++ * Default menu link implementation.
++ */
++
++function menu_per_role_features_pipe_menu_links_alter(&$pipe, $data, $export) {
++  foreach ($export['features']['menu_links'] as $link) {
++    $pipe['menu_per_role'][] = $link;
++  }
++}
++
++function menu_per_role_features_export($data, &$export, $module_name) {
++  // Check to see if the identifier is valid and pipe through any roles if necessary.
++  $roles = array();
++  foreach ($data as $component) {
++    $config = menu_per_role_load(features_menu_link_load($component));
++    foreach (array_merge($config['show'], $config['hide']) as $role) {
++      $roles[$role] = $role;
++    }
++    $export['features']['menu_per_role'][$component] = $component;
++  }
++
++  if (count($export['features']['menu_per_role'])) $export['dependencies']['menu_per_role'] = 'menu_per_role';
++  
++  $pipe = array();
++  if (count($roles)) $pipe['user_role'] = $roles;
++  return $pipe;
++}
++
++function menu_per_role_features_export_render($module_name, $data, $export = NULL) {
++  $code = array();
++  $code[] = '$menu_per_role = array();';
++  foreach ($data as $name) {
++    $code[] = "  \$menu_per_role['{$name}'] = " . features_var_export(menu_per_role_load(features_menu_link_load($name))) .";";
++  }
++  $code[] = "return \$menu_per_role;";
++  $code = implode("\n", $code);
++  return array('menu_per_role_defaults' => $code);
++}
++
++function menu_per_role_features_revert($module_name) {
++  menu_per_role_features_rebuild($module_name);
++}
++
++function menu_per_role_features_rebuild($module_name) {
++  if ($links = features_get_default('menu_per_role', $module_name)) {
++    foreach ($links as $identifier => $config) menu_per_role_save(features_menu_link_load($identifier), $config);
++    cache_clear_all('*', 'cache_menu', TRUE);
++  }
++}
++
++/**
++ * UUID Implementation
++ */
++
++function menu_per_role_features_pipe_menu_uuid_links_alter(&$pipe, $data, $export) {
++  foreach ($export['features']['menu_uuid_links'] as $link) {
++    $pipe['menu_per_role_uuid'][] = $link;
++  }
++}
++
++function menu_per_role_uuid_features_export($data, &$export, $module_name) {
++  // Check to see if the identifier is valid and pipe through any roles if necessary.
++  $roles = array();
++  foreach ($data as $component) {
++    $config = menu_per_role_load(uuid_features_menu_link_load($component));
++    foreach (array_merge($config['show'], $config['hide']) as $role) {
++      $roles[$role] = $role;
++    }
++    $export['features']['menu_per_role_uuid'][$component] = $component;
++  }
++
++  if (count($export['features']['menu_per_role_uuid'])) $export['dependencies']['menu_per_role'] = 'menu_per_role';
++  
++  $pipe = array();
++  if (count($roles)) $pipe['user_role'] = $roles;
++  return $pipe;
++}
++
++function menu_per_role_uuid_features_export_render($module_name, $data, $export = NULL) {
++  $code = array();
++  $code[] = '$menu_per_role_uuid = array();';
++  foreach ($data as $name) {
++    $code[] = "  \$menu_per_role_uuid['{$name}'] = " . features_var_export(menu_per_role_load(uuid_features_menu_link_load($name))) .";";
++  }
++  $code[] = "return \$menu_per_role_uuid;";
++  $code = implode("\n", $code);
++  return array('menu_per_role_uuid_defaults' => $code);
++}
++
++function menu_per_role_uuid_features_revert($module_name) {
++  menu_per_role_uuid_features_rebuild($module_name);
++}
++
++function menu_per_role_uuid_features_rebuild($module_name) {
++  if ($links = features_get_default('menu_per_role_uuid', $module_name)) {
++    foreach ($links as $uuid => $config) menu_per_role_save(uuid_features_menu_link_load($uuid), $config);
++    cache_clear_all('*', 'cache_menu', TRUE);
++  }
++}
++
++/**
++ * LOAD AND SAVE FUNCTIONS
++ */
++
++function menu_per_role_load($link) {
++  $show = $hide = array();
++  $roles = user_roles();
++  foreach (_menu_per_role_get_roles($link['mlid'], 0) as $role) {
++    $show[$roles[$role]] = $roles[$role];
++  }
++  foreach (_menu_per_role_get_roles($link['mlid'], 1) as $role) {
++    $hide[$roles[$role]] = $roles[$role];
++  }
++  return array('show' => $show, 'hide' => $hide);
++}
++
++function menu_per_role_save($link, $config) {
++  $roles = _features_get_roles();
++  $rids = $hrids = array();
++
++  foreach ($config['show'] as $role) {
++    if (isset($roles[$role])) {
++      $rids[] = $roles[$role]['rid'];
++    }
++  }
++  $rids_str = implode(',', $rids);
++
++  foreach ($config['hide'] as $role) {
++    if (isset($roles[$role])) {
++      $hrids[] = $roles[$role]['rid'];
++    }
++  }
++  $hrids_str = implode(',', $hrids);
++
++  if ($rids_str || $hrids_str) {
++    db_query("UPDATE {menu_per_role} SET rids = '%s', hrids = '%s' WHERE mlid = %d", $rids_str, $hrids_str, $link['mlid']);
++    if (db_affected_rows() == 0) {
++      // if nothing was affected, the row did not exist yet
++      // (although with MySQL this may fail because db_affected_rows() may only return
++      // rows that have been changed instead of the # of rows that match the WHERE clause.)
++      if ($db_type != 'pgsql') {
++        $insert = !db_result(db_query("SELECT 1 FROM {menu_per_role} WHERE mlid = %d", $link['mlid']));
++      }
++      else {
++        $insert = TRUE;
++      }
++      if ($insert) {
++        db_query("INSERT INTO {menu_per_role} (mlid, rids, hrids) VALUES (%d, '%s', '%s')", $link['mlid'], $rids_str, $hrids_str);
++      }
++    }
++  } else {
++    // we don't need to save it when empty, instead, remove that completely
++    db_query("DELETE FROM {menu_per_role} WHERE mlid = %d", $link['mlid']);
++  }
++}
+\ No newline at end of file
+diff --git a/menu_per_role.module b/menu_per_role.module
+index 9a0e7d9..dcda5b1 100644
+--- a/menu_per_role.module
++++ b/menu_per_role.module
+@@ -19,6 +19,30 @@ function menu_per_role_menu() {
+   return _menu_per_role_menu();
+ }
+ 
++/**
++ * Implementation of hook_features_api()
++ */
++function menu_per_role_features_api() {
++  $features = array();
++  $features['menu_per_role'] = array(
++    'name' => t('Menu Per Role'),
++    'default_hook' => 'menu_per_role_defaults',
++    'default_file' => FEATURES_DEFAULTS_INCLUDED,
++    'features_source' => FALSE,
++    'file' => drupal_get_path('module', 'menu_per_role') .'/menu_per_role.features.inc',
++  );
++  if (module_exists('uuid_features_menu')) {
++    $features['menu_per_role_uuid'] = array(
++      'name' => t('Menu Per Role (UUID)'),
++      'default_hook' => 'menu_per_role_uuid_defaults',
++      'default_file' => FEATURES_DEFAULTS_INCLUDED,
++      'features_source' => FALSE,
++      'file' => drupal_get_path('module', 'menu_per_role') .'/menu_per_role.features.inc',
++    );
++  }
++  return $features;
++}
++
+ /*
+  * Determines access for a give menu item id
+  *
+@@ -198,4 +222,4 @@ function _menu_per_role_get_roles($mlid, $show) {
+   return array();
+ }
+ 
+-// vim: ts=2 sw=2 et syntax=php
++// vim: ts=2 sw=2 et syntax=php
+\ No newline at end of file
+-- 
+1.7.4.1
+

@@ -1,0 +1,20 @@
+<?php
+
+function _uninstall_modules($modules) {
+  static $files = 0;
+  if (!is_array($files)) $files = module_rebuild_cache();
+  foreach ((array) $modules as $module) {
+    if (module_exists($module) && empty($files[$module]->info['dependents'])) {
+      module_disable(array($module));
+      drupal_uninstall_module($module);
+    }
+  }
+}
+
+function _delete_roles($rids) {
+  $placeholders = db_placeholders($rids);
+  db_query("DELETE FROM {role} WHERE rid IN ($placeholders)", $rids);
+  db_query("DELETE FROM {permission} WHERE rid IN ($placeholders)", $rids);
+  // Update the users who have this role set:
+  db_query("DELETE FROM {users_roles} WHERE rid IN ($placeholders)", $rids);
+}
